@@ -238,6 +238,7 @@ class UniversalClient:
                     model_id, suffix = model_id[:-5], ":free"
                 mapping = {
                     "gemini-2.5-flash-image-preview": "google/gemini-2.5-flash-image-preview",
+                    "gemini-3-pro-image-preview": "google/gemini-3-pro-image-preview",
                     "gemini-2.5-flash": "google/gemini-2.5-flash",
                     "gemini-2.5-pro": "google/gemini-2.5-pro",
                     "gemini-2.5-flash-002": "google/gemini-2.5-flash-002",
@@ -481,6 +482,7 @@ class IFGeminiAdvanced:
                         "gemini-2.5-pro",
                         "gemini-2.5-flash-002",
                         "gemini-2.5-flash-image-preview",
+                        "gemini-3-pro-image-preview",
                         "gemini-2.0-flash-exp",
                         "gemini-2.0-pro",
                         "gemini-2.0-flash",
@@ -489,6 +491,7 @@ class IFGeminiAdvanced:
                         "google/gemini-2.5-pro",
                         "google/gemini-2.5-flash-image-preview",
                         "google/gemini-2.5-flash-image-preview:free",
+                        "google/gemini-3-pro-image-preview",
                         "google/gemini-2.0-flash-exp",
                     ],
                     {"default": "gemini-2.5-flash"},
@@ -510,6 +513,7 @@ class IFGeminiAdvanced:
                     ["auto", "gemini", "openrouter"], 
                     {"default": "auto"}
                 ),
+                "api_key_env_name": ("STRING", {"default": "", "placeholder": "CUSTOM_API_KEY_VAR"}),
                 "external_api_key": ("STRING", {"default": ""}),
                 "chat_mode": ("BOOLEAN", {"default": False}),
                 "clear_history": ("BOOLEAN", {"default": False}),
@@ -540,6 +544,7 @@ class IFGeminiAdvanced:
         batch_count=1,
         aspect_ratio="none",
         api_provider="auto",
+        api_key_env_name="",
         external_api_key="",
         chat_mode=False,
         clear_history=False,
@@ -573,6 +578,17 @@ class IFGeminiAdvanced:
         
         # Clean and validate external API key
         cleaned_external_key = external_api_key.strip() if external_api_key else ""
+        
+        # Check for custom environment variable name (useful for ComfyDeploy secrets)
+        cleaned_env_name = api_key_env_name.strip() if api_key_env_name else ""
+        if cleaned_env_name and not cleaned_external_key:
+            # Try to load API key from custom environment variable
+            custom_env_key = os.environ.get(cleaned_env_name, "")
+            if custom_env_key:
+                cleaned_external_key = custom_env_key.strip()
+                logger.info(f"Loaded API key from custom environment variable: {cleaned_env_name}")
+            else:
+                logger.warning(f"Custom environment variable '{cleaned_env_name}' not found or empty")
         
         if cleaned_external_key:
             # External key provided - use provider selector to determine type
@@ -681,6 +697,7 @@ class IFGeminiAdvanced:
                 sequential_generation=sequential_generation,
                 api_call_delay=api_call_delay,
                 api_provider=api_provider,
+                api_key_env_name=cleaned_env_name,
             )
 
         # Check for potential compatibility issues with OpenRouter
@@ -912,6 +929,7 @@ class IFGeminiAdvanced:
         sequential_generation=False,
         api_call_delay=1.0,
         api_provider="auto",
+        api_key_env_name="",
     ):
         """Generate images using Gemini models with image generation capabilities"""
         try:
@@ -935,6 +953,7 @@ class IFGeminiAdvanced:
                 # List of known official Gemini models that support image generation.
                 image_capable_models = [
                     "gemini-2.5-flash-image-preview",
+                    "gemini-3-pro-image-preview",
                     "gemini-2.5-flash",
                     "gemini-2.5-flash-002"
                 ]
@@ -952,6 +971,16 @@ class IFGeminiAdvanced:
             # Use the API key based on the source specified and provider
             api_key = None
             
+            # Check for custom environment variable name (useful for ComfyDeploy secrets)
+            if api_key_env_name and api_key_env_name.strip():
+                custom_env_key = os.environ.get(api_key_env_name.strip(), "")
+                if custom_env_key:
+                    api_key = custom_env_key.strip()
+                    logger.info(f"Using API key from custom environment variable: {api_key_env_name.strip()}")
+                    # Skip the rest of API key resolution since we have a key
+                else:
+                    logger.warning(f"Custom environment variable '{api_key_env_name.strip()}' not found or empty")
+            
             # Determine which API key to look for based on provider
             if api_provider == "openrouter":
                 env_key_name = "OPENROUTER_API_KEY"
@@ -964,7 +993,10 @@ class IFGeminiAdvanced:
                 else:
                     env_key_name = "GEMINI_API_KEY"
             
-            if api_key_source == "external" and external_api_key:
+            if api_key:
+                # Already loaded from custom env variable, skip to client creation
+                pass
+            elif api_key_source == "external" and external_api_key:
                 api_key = external_api_key
                 logger.info("Using external API key provided in the node for image generation")
             elif api_key_source == "system" and os.environ.get(env_key_name):
@@ -1596,11 +1628,13 @@ def get_available_models(api_key, api_provider=None):
                 "google/gemini-2.5-pro", 
                 "google/gemini-2.5-flash-image-preview",
                 "google/gemini-2.5-flash-image-preview:free",
+                "google/gemini-3-pro-image-preview",
                 "google/gemini-2.0-flash-exp",
                 "gemini-2.5-flash",  # Also include standard names as fallback
                 "gemini-2.5-pro",
                 "gemini-2.5-flash-002",
                 "gemini-2.5-flash-image-preview",
+                "gemini-3-pro-image-preview",
                 "gemini-2.0-flash-exp",
                 "gemini-2.0-pro",
                 "gemini-2.0-flash"
@@ -1611,6 +1645,7 @@ def get_available_models(api_key, api_provider=None):
                 "gemini-2.5-pro",
                 "gemini-2.5-flash-002",
                 "gemini-2.5-flash-image-preview",
+                "gemini-3-pro-image-preview",
                 "gemini-2.0-flash-exp",
                 "gemini-2.0-pro",
                 "gemini-2.0-flash"
@@ -1640,11 +1675,13 @@ def get_available_models(api_key, api_provider=None):
                 "google/gemini-2.5-flash-image-preview:free",
                 "google/gemini-2.5-flash",
                 "google/gemini-2.5-pro",
-                "google/gemini-2.5-flash-image-preview", 
+                "google/gemini-2.5-flash-image-preview",
+                "google/gemini-3-pro-image-preview",
                 "gemini-2.5-flash",
                 "gemini-2.5-pro",
                 "gemini-2.5-flash-002",
                 "gemini-2.5-flash-image-preview",
+                "gemini-3-pro-image-preview",
                 "gemini-2.0-flash-exp",
                 "gemini-2.0-pro",
                 "gemini-2.0-flash"
@@ -1655,11 +1692,13 @@ def get_available_models(api_key, api_provider=None):
                 "google/gemini-2.5-flash-image-preview:free",
                 "google/gemini-2.5-flash",
                 "google/gemini-2.5-pro",
-                "google/gemini-2.5-flash-image-preview", 
+                "google/gemini-2.5-flash-image-preview",
+                "google/gemini-3-pro-image-preview",
                 "gemini-2.5-flash",
                 "gemini-2.5-pro",
                 "gemini-2.5-flash-002",
                 "gemini-2.5-flash-image-preview",
+                "gemini-3-pro-image-preview",
                 "gemini-2.0-flash-exp",
                 "gemini-2.0-pro",
                 "gemini-2.0-flash"
@@ -1670,6 +1709,7 @@ def get_available_models(api_key, api_provider=None):
                 "gemini-2.5-pro",
                 "gemini-2.5-flash-002",
                 "gemini-2.5-flash-image-preview",
+                "gemini-3-pro-image-preview",
                 "gemini-2.0-flash-exp",
                 "gemini-2.0-pro",
                 "gemini-2.0-flash"

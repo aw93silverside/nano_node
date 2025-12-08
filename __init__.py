@@ -3,13 +3,13 @@ from .task_prompt_manager import IFTaskPromptManager, IFPromptCombiner
 from .api_routes import *  # Import API routes
 
 NODE_CLASS_MAPPINGS = {
-    "IFGeminiNode": IFGeminiAdvanced,
+    "CustomGeminiNode": IFGeminiAdvanced,
     "IFTaskPromptManager": IFTaskPromptManager,
     "IFPromptCombiner": IFPromptCombiner
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "IFGeminiNode": "IF Gemini",
+    "CustomGeminiNode": "Custom Gemini",
     "IFTaskPromptManager": "IF Task Prompt Manager",
     "IFPromptCombiner": "IF Prompt Combiner"
 }

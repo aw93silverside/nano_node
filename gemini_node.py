@@ -504,10 +504,14 @@ class IFGeminiAdvanced:
                 "audio": ("AUDIO",),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFF}),
                 "sequential_generation": ("BOOLEAN", {"default": False}),
-                "batch_count": ("INT", {"default": 4, "min": 1, "max": 20}),
+                "batch_count": ("INT", {"default": 2, "min": 1, "max": 20}),
                 "aspect_ratio": (
                     ["none", "1:1", "16:9", "9:16", "4:3", "3:4", "5:4", "4:5"],
                     {"default": "none"},
+                ),
+                "resolution": (
+                    ["1K", "2K", "4K"],
+                    {"default": "2K"},
                 ),
                 "api_provider": (
                     ["auto", "gemini", "openrouter"], 
@@ -543,6 +547,7 @@ class IFGeminiAdvanced:
         sequential_generation=False,
         batch_count=1,
         aspect_ratio="none",
+        resolution="2K",
         api_provider="auto",
         api_key_env_name="",
         external_api_key="",
@@ -691,6 +696,7 @@ class IFGeminiAdvanced:
                 seed=operation_seed,
                 max_images=max_images,
                 aspect_ratio=aspect_ratio,
+                resolution=resolution,
                 use_random_seed=use_random_seed,
                 external_api_key=cleaned_external_key,
                 api_key_source=api_key_source,
@@ -923,6 +929,7 @@ class IFGeminiAdvanced:
         seed=0,
         max_images=6,
         aspect_ratio="none",
+        resolution="2K",
         use_random_seed=False,
         external_api_key="",
         api_key_source=None,
@@ -1102,9 +1109,10 @@ class IFGeminiAdvanced:
                 "4:5": (819, 1024),  # Medium portrait format
             }
 
-            # Get target dimensions based on aspect ratio
+            # Get target dimensions based on aspect ratio (used for prompt hints and reference image sizing)
             target_width, target_height = aspect_ratio_dimensions.get(aspect_ratio, (1024, 1024))
-            logger.info(f"Using resolution {target_width}x{target_height} for aspect ratio {aspect_ratio}")
+            api_aspect_ratio = "1:1" if aspect_ratio == "none" else aspect_ratio
+            logger.info(f"Using aspect ratio {api_aspect_ratio}, image size {resolution} (hint dimensions {target_width}x{target_height})")
 
             all_generated_images_bytes = []
             all_generated_text = []
@@ -1197,17 +1205,22 @@ class IFGeminiAdvanced:
                     status_text = f"Error during OpenRouter API call: {e}"
                     logger.error(status_text, exc_info=True)
             else:
-                # Set up generation config with required fields
+                # Set up generation config with required fields and Nano Banana image_config (1K/2K/4K, aspect ratio)
+                image_config = types.ImageConfig(
+                    aspect_ratio=api_aspect_ratio,
+                    image_size=resolution,
+                )
                 gen_config_args = {
                     "temperature": temperature,
-                    "response_modalities": ["Text", "Image"],  # Critical for image generation
-                    "seed": seed,  # Always include seed in config
+                    "response_modalities": ["Text", "Image"],
+                    "seed": seed,
                     "safety_settings": [
                         {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                         {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
                         {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
                         {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
                     ],
+                    "image_config": image_config,
                 }
 
                 generation_config = types.GenerateContentConfig(**gen_config_args)
@@ -1241,11 +1254,12 @@ class IFGeminiAdvanced:
                             current_seed = (seed + i) % (2**31 - 1)
                             logger.info(f"Sequential step {i+1}/{batch_count} with seed {current_seed}")
                             
-                            # Update config with current seed
+                            # Update config with current seed and image_config (resolution, aspect ratio)
                             step_config = types.GenerateContentConfig(
                                 temperature=temperature,
                                 response_modalities=["Text", "Image"],
                                 seed=current_seed,
+                                image_config=image_config,
                                 safety_settings=[
                                     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                                     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -1386,11 +1400,12 @@ class IFGeminiAdvanced:
                             # This ensures consistent but different seeds across batches
                             current_seed = (seed + i) % (2**31 - 1)
                             
-                            # Create batch-specific configuration with the unique seed
+                            # Create batch-specific configuration with unique seed and image_config (resolution, aspect ratio)
                             batch_config = types.GenerateContentConfig(
                                 temperature=temperature,
                                 response_modalities=["Text", "Image"],
                                 seed=current_seed,
+                                image_config=image_config,
                                 safety_settings=[
                                     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                                     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
